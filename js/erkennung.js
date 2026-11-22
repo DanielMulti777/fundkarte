@@ -32,6 +32,11 @@ const MUSTER = [
   new RegExp(String.raw`(${ZAHL})\s*°\s*(\d{1,2}[.,]\d+)\s*'\s*([NSEOW])(?![a-zäöü])`, 'gi'),
   // 47.73750° N  |  47,7375 N
   new RegExp(String.raw`(${ZAHL}[.,]\d{3,})\s*°?\s*([NSEOW])(?![a-zäöü])`, 'gi'),
+  // Texterkennung hat ein Zeichen verschluckt oder verwechselt:
+  // 47°4415" N (Minutenstrich fehlt) | 47°44 15" N | 47o44'15" N | 47*44'15" N
+  new RegExp(String.raw`(${ZAHL})\s*[°o*]\s*(\d{2})\s*'?\s*(\d{2}(?:[.,]\d+)?)\s*(?:"\s*([NSEOW0])|"?\s*([NSEOW]))(?![a-zäöü])`, 'gi'),
+  // 4744'15" N (Gradzeichen fehlt; nur zweistellige Grade eindeutig trennbar)
+  new RegExp(String.raw`(?<![\d.,])(\d{2})(\d{2})\s*'\s*(${DEZ})\s*(?:"\s*([NSEOW0])|"?\s*([NSEOW]))(?![a-zäöü])`, 'gi'),
 ];
 
 const zahl = (s) => Number(String(s).replace(',', '.'));
@@ -48,7 +53,7 @@ function teilwerte(text) {
       const von = m.index; const bis = m.index + m[0].length;
       if (!frei(von, bis)) continue;
       let wert; let richtung;
-      if (art === 0) {
+      if (art === 0 || art === 3 || art === 4) {
         const [g, mi, se] = [zahl(m[1]), zahl(m[2]), zahl(m[3])];
         if (mi >= 60 || se >= 60) continue;
         wert = g + mi / 60 + se / 3600;

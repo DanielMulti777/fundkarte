@@ -34,6 +34,15 @@ test('Dezimalpaar ohne Leerzeichen', () => koord('47.7375,16.39722', 47.7375, 16
 test('Sued/West', () => koord(`33°51'35" S 151°12'40" E`, -(33 + 51 / 60 + 35 / 3600), 151 + 12 / 60 + 40 / 3600));
 test('Laenge vor Breite', () => koord(`16°23'50" O 47°44'15" N`, ...MB));
 
+// --- verschluckte oder verwechselte Zeichen (echte OCR-Fehler) ---
+test('Minutenstrich fehlt', () => koord(`47°4415" N 16°23'50" O`, ...MB));
+test('Minutenstrich fehlt bei beiden', () => koord(`47°4415" N 16°2350" O`, ...MB));
+test('Leerzeichen statt Minutenstrich', () => koord(`47°44 15" N 16°23 50" O`, ...MB));
+test('o statt Gradzeichen', () => koord(`47o44'15" N 16o23'50" O`, ...MB));
+test('Stern statt Gradzeichen', () => koord(`47*44'15" N 16*23'50" O`, ...MB));
+test('Gradzeichen fehlt', () => koord(`4744'15" N 1623'50" O`, ...MB));
+test('Zwei Zeilen mit Datum (Live-Fall)', () => koord(`47°4415" N 16°23'50" O\n14. Juni 2025 08:05`, ...MB));
+
 test('kein Treffer bei Hoehe/Uhrzeit', () => assert.equal(koordinatenAusText('234 m Höhe 12:41 Mattersburg'), null));
 test('kein Treffer bei Kompasskurs', () => assert.equal(koordinatenAusText('274° W'), null));
 test('ungueltige Minuten', () => assert.equal(koordinatenAusText(`47°74'15" N 16°23'50" O`), null));
