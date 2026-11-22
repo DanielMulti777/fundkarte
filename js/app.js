@@ -5,7 +5,7 @@ import * as offline from './offline.js';
 import { alsGradMinSek, koordinatenAusText } from './erkennung.js';
 import { bildAuswerten, dateiSchluessel } from './nachtrag.js';
 
-const VERSION = '1.2'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
+const VERSION = '1.2.1'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
 
 // ---------- Stammdaten ----------
 const TYPEN = {
