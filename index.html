@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2f5d3a">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Fundkarte Österreich</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>🌿 <b>Fundkarte</b> <span id="kopfBezirk"></span></h1>
+    <div class="topbar-btns">
+      <button class="tb" data-open="panelListe" aria-label="Liste">☰<span>Liste</span></button>
+      <button class="tb" data-open="panelFilter" aria-label="Filter">⚲<span>Filter</span><b id="filterBadge" hidden></b></button>
+      <button class="tb" data-open="panelMenu" aria-label="Menü">⋮<span>Mehr</span></button>
+    </div>
+  </header>
+
+  <main id="map" aria-label="Karte"></main>
+
+  <div id="banner" class="banner" hidden>
+    <span id="bannerText"></span>
+    <button id="bannerAbbrechen" class="btn btn-klein">Abbrechen</button>
+  </div>
+
+  <div id="offlineHinweis" class="offline-hinweis" hidden>Offline – gespeicherte Kacheln werden angezeigt</div>
+
+  <nav class="fab-row">
+    <button id="btnStandortFund" class="btn btn-gross btn-hell">📍 Am Standort</button>
+    <button id="btnKartenFund" class="btn btn-gross">＋ Auf Karte</button>
+  </nav>
+
+  <!-- ===== Liste ===== -->
+  <section class="panel" id="panelListe" hidden>
+    <header class="panel-kopf"><h2>Alle Funde <small id="listeZahl"></small></h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-werkzeug">
+      <input type="search" class="suche" placeholder="Artname suchen …" autocomplete="off">
+      <select id="sortierung" aria-label="Sortierung">
+        <option value="datum-ab">Neueste zuerst</option>
+        <option value="datum-auf">Älteste zuerst</option>
+        <option value="art">Artname A–Z</option>
+        <option value="kategorie">Kategorie</option>
+        <option value="gemeinde">Gemeinde</option>
+      </select>
+    </div>
+    <ul id="liste" class="liste"></ul>
+  </section>
+
+  <!-- ===== Filter ===== -->
+  <section class="panel" id="panelFilter" hidden>
+    <header class="panel-kopf"><h2>Filter</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-inhalt">
+      <label class="feld"><span>Artname enthält</span><input type="search" class="suche" placeholder="z. B. Orchis, Wiedehopf" autocomplete="off"></label>
+      <fieldset class="feld"><legend>Kategorie</legend><div id="filterTypen" class="chips"></div></fieldset>
+      <label class="feld"><span>Art</span><select id="filterArt"><option value="">Alle Arten</option></select></label>
+      <div class="zeile">
+        <label class="feld"><span>Von</span><input type="date" id="filterVon"></label>
+        <label class="feld"><span>Bis</span><input type="date" id="filterBis"></label>
+      </div>
+      <div class="chips chips-klein" id="filterZeitSchnell">
+        <button type="button" data-zeit="30">30 Tage</button>
+        <button type="button" data-zeit="jahr">Dieses Jahr</button>
+        <button type="button" data-zeit="vorjahr">Vorjahr</button>
+      </div>
+      <fieldset class="feld"><legend>Lebensraum</legend><div id="filterLebensraum" class="chips"></div></fieldset>
+      <div class="knopfzeile">
+        <button id="filterReset" class="btn btn-hell">Zurücksetzen</button>
+        <button class="btn schliessen-btn">Fertig</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Menü ===== -->
+  <section class="panel" id="panelMenu" hidden>
+    <header class="panel-kopf"><h2>Mehr</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-inhalt menue">
+      <button class="btn btn-gross btn-hell" data-open="panelEbenen">🗺️ Kartenansicht &amp; Grenzen</button>
+      <button class="btn btn-gross btn-hell" data-open="panelStatistik">📊 Statistik</button>
+      <button class="btn btn-gross btn-hell" data-open="panelDaten">💾 Export / Import</button>
+      <button class="btn btn-gross btn-hell" data-open="panelOffline">📶 Karten für offline</button>
+      <button class="btn btn-gross btn-hell" data-open="panelInfo">ℹ️ Quellen &amp; Hinweise</button>
+    </div>
+  </section>
+
+  <!-- ===== Ebenen ===== -->
+  <section class="panel" id="panelEbenen" hidden>
+    <header class="panel-kopf"><h2>Kartenansicht</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-inhalt">
+      <label class="feld"><span>Springe zu Bezirk</span><select id="bezirkWahl"></select></label>
+      <h3>Hintergrund</h3>
+      <div id="ebenenListe" class="ebenen"></div>
+      <h3>Grenzen</h3>
+      <label class="schalter"><input type="checkbox" id="chkBezirke" checked> Bezirksgrenzen</label>
+      <label class="schalter"><input type="checkbox" id="chkGemeinden"> Gemeindegrenzen <small class="hinweis">(beim Hineinzoomen)</small></label>
+      <p class="hinweis">⤓ = kann für offline gespeichert werden („Mehr → Karten für offline“).</p>
+    </div>
+  </section>
+
+  <!-- ===== Statistik ===== -->
+  <section class="panel" id="panelStatistik" hidden>
+    <header class="panel-kopf"><h2>Statistik</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-inhalt" id="statistik"></div>
+  </section>
+
+  <!-- ===== Daten ===== -->
+  <section class="panel" id="panelDaten" hidden>
+    <header class="panel-kopf"><h2>Export / Import</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-inhalt">
+      <h3>Exportieren</h3>
+      <p class="hinweis">Exportiert werden die aktuell gefilterten Funde (<b id="exportZahl">0</b>).</p>
+      <button id="exportCsv" class="btn btn-gross btn-hell">CSV (Excel)</button>
+      <button id="exportGeojson" class="btn btn-gross btn-hell">GeoJSON</button>
+      <button id="exportSicherung" class="btn btn-gross btn-hell">Vollsicherung mit Fotos (GeoJSON)</button>
+      <p class="hinweis">Die Vollsicherung enthält alle Funde samt Fotos – damit lassen sich die Daten auf ein anderes Gerät übertragen.</p>
+      <h3>Importieren</h3>
+      <label class="btn btn-gross btn-hell datei-btn">GeoJSON-Datei wählen<input type="file" id="importDatei" accept=".geojson,.json,application/geo+json,application/json" hidden></label>
+      <p class="hinweis">Punkte werden übernommen; gleiche Funde (gleiche ID) werden nur ersetzt, wenn die importierte Version neuer ist.</p>
+      <h3>Speicher</h3>
+      <p id="speicherInfo" class="hinweis"></p>
+    </div>
+  </section>
+
+  <!-- ===== Offline ===== -->
+  <section class="panel" id="panelOffline" hidden>
+    <header class="panel-kopf"><h2>Karten für offline</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-inhalt">
+      <label class="feld"><span>Bezirk</span><select id="offlineBezirk"></select></label>
+      <p class="hinweis">Lädt Kartenkacheln für den ganzen Bezirk aufs Gerät. Am besten im WLAN. Die App selbst und deine Funde funktionieren immer offline.</p>
+      <fieldset class="feld"><legend>Karten</legend><div id="offlineEbenen"></div></fieldset>
+      <label class="feld"><span>Detailstufe</span>
+        <select id="offlineZoom">
+          <option value="14">Übersicht (bis Zoom 14)</option>
+          <option value="15">Mittel (bis Zoom 15)</option>
+          <option value="16" selected>Fein (bis Zoom 16)</option>
+          <option value="17">Sehr fein (bis Zoom 17)</option>
+        </select>
+      </label>
+      <p id="offlineSchaetzung" class="hinweis"></p>
+      <div class="fortschritt" hidden id="offlineFortschritt"><div></div></div>
+      <p id="offlineStatus" class="hinweis"></p>
+      <div class="knopfzeile">
+        <button id="offlineStart" class="btn">Herunterladen</button>
+        <button id="offlineStopp" class="btn btn-hell" hidden>Abbrechen</button>
+      </div>
+      <h3>Gespeichert</h3>
+      <p id="offlineBestand" class="hinweis"></p>
+      <button id="offlineLoeschen" class="btn btn-hell">Offline-Karten löschen</button>
+    </div>
+  </section>
+
+  <!-- ===== Info ===== -->
+  <section class="panel" id="panelInfo" hidden>
+    <header class="panel-kopf"><h2>Quellen &amp; Hinweise</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-inhalt text">
+      <p><b>Deine Daten</b> bleiben ausschließlich auf diesem Gerät (im Browser gespeichert). Nichts wird hochgeladen. Mach ab und zu eine <b>Vollsicherung</b> unter „Export / Import“ – wenn du die Browserdaten löschst, sind die Funde sonst weg.</p>
+      <p><b>Am Handy installieren:</b> Im Browser-Menü „Zum Startbildschirm hinzufügen“ bzw. „App installieren“ wählen. Danach startet die Karte wie eine App, auch ohne Netz.</p>
+      <p><b>Kartengrundlagen</b></p>
+      <ul>
+        <li>Straßenkarte: © OpenStreetMap-Mitwirkende (ODbL)</li>
+        <li>basemap.at (Karte, Orthofoto, Gelände): Datenquelle basemap.at, CC BY 4.0</li>
+        <li>Topografie: © OpenTopoMap (CC-BY-SA), Daten © OpenStreetMap, SRTM</li>
+        <li>Bezirks- und Gemeindegrenzen: © OpenStreetMap-Mitwirkende (ODbL), vereinfacht</li>
+      </ul>
+      <p class="hinweis">Version <span id="version"></span></p>
+    </div>
+  </section>
+
+  <!-- ===== Formular ===== -->
+  <section class="panel panel-formular" id="panelFormular" hidden>
+    <header class="panel-kopf"><h2 id="formTitel">Neuer Fund</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <form id="formular" class="panel-inhalt" novalidate>
+      <div class="kat-wahl" role="radiogroup" aria-label="Kategorie">
+        <button type="button" data-kat="Pflanze" class="kat">🌿 Pflanze</button>
+        <button type="button" data-kat="Tier" class="kat">🐾 Tier</button>
+      </div>
+      <div id="gruppenWahl" class="chips" hidden></div>
+      <label class="feld"><span>Artname (deutsch) *</span><input id="fArt" list="artenListe" required autocomplete="off" enterkeyhint="next"></label>
+      <datalist id="artenListe"></datalist>
+      <label class="feld"><span>Wissenschaftlicher Name</span><input id="fWiss" autocomplete="off" lang="la" enterkeyhint="next"></label>
+      <label class="feld"><span>Datum &amp; Uhrzeit</span><input type="datetime-local" id="fDatum"></label>
+      <label class="feld"><span>Anzahl / Häufigkeit</span><input id="fAnzahl" list="anzahlListe" autocomplete="off" placeholder="z. B. 3, 6–20, zahlreich"></label>
+      <datalist id="anzahlListe">
+        <option value="1"><option value="2–5"><option value="6–20"><option value="21–100"><option value="> 100">
+        <option value="vereinzelt"><option value="zahlreich"><option value="flächig">
+      </datalist>
+      <label class="feld"><span>Lebensraum</span><select id="fLebensraum"></select></label>
+      <label class="feld"><span>Notiz</span><textarea id="fNotiz" rows="3"></textarea></label>
+      <div class="feld">
+        <span>Foto</span>
+        <div class="foto-feld">
+          <img id="fotoVorschau" alt="" hidden>
+          <label class="btn btn-hell datei-btn">📷 Foto aufnehmen / wählen<input type="file" id="fFoto" accept="image/*" hidden></label>
+          <button type="button" id="fotoEntfernen" class="btn btn-hell" hidden>Foto entfernen</button>
+        </div>
+      </div>
+      <p id="fPosition" class="hinweis position"></p>
+      <div class="knopfzeile">
+        <button type="button" id="formLoeschen" class="btn btn-gefahr" hidden>Löschen</button>
+        <button type="button" class="btn btn-hell schliessen-btn">Abbrechen</button>
+        <button type="submit" class="btn">Speichern</button>
+      </div>
+    </form>
+  </section>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/markercluster/leaflet.markercluster.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
