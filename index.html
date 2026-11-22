@@ -30,6 +30,11 @@
     <button id="bannerAbbrechen" class="btn btn-klein">Abbrechen</button>
   </div>
 
+  <div id="updateHinweis" class="update-hinweis" hidden>
+    <span>✨ Neue Version verfügbar</span>
+    <button id="updateLaden" class="btn btn-klein">Neu laden</button>
+  </div>
+
   <div id="offlineHinweis" class="offline-hinweis" hidden>Offline – gespeicherte Kacheln werden angezeigt</div>
 
   <nav class="fab-row">
@@ -87,6 +92,7 @@
       <button class="btn btn-gross btn-hell" data-open="panelDaten">💾 Export / Import</button>
       <button class="btn btn-gross btn-hell" data-open="panelOffline">📶 Karten für offline</button>
       <button class="btn btn-gross btn-hell" data-open="panelInfo">ℹ️ Quellen &amp; Hinweise</button>
+      <p class="hinweis menue-version">Version <span class="app-version"></span></p>
     </div>
   </section>
 
@@ -186,7 +192,7 @@
         <li>Topografie: © OpenTopoMap (CC-BY-SA), Daten © OpenStreetMap, SRTM</li>
         <li>Bezirks- und Gemeindegrenzen: © OpenStreetMap-Mitwirkende (ODbL), vereinfacht</li>
       </ul>
-      <p class="hinweis">Version <span id="version"></span></p>
+      <p class="hinweis">Version <span class="app-version"></span></p>
     </div>
   </section>
 

@@ -293,3 +293,13 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--moos); outl
 .nt-karte { height: 240px; border-radius: 10px; border: 1px solid var(--rand); margin-bottom: .3rem; }
 .nt-liste { padding-left: 1.1rem; }
 .nt-liste li { margin-bottom: .45rem; }
+
+/* Update-Hinweis (liegt auch ueber offenen Panels) */
+.update-hinweis {
+  position: fixed; z-index: 1500; left: .7rem; right: .7rem; top: calc(var(--oben) + 62px);
+  display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+  padding: .55rem .7rem .55rem 1rem; border-radius: var(--radius);
+  background: #22301f; color: #fff; font-weight: 600; box-shadow: var(--schatten);
+}
+.update-hinweis .btn { background: #f0c24b; color: #2b2b12; }
+.menue-version { text-align: center; margin-top: 1.2rem; }

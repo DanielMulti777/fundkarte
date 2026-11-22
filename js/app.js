@@ -5,7 +5,7 @@ import * as offline from './offline.js';
 import { alsGradMinSek, koordinatenAusText } from './erkennung.js';
 import { bildAuswerten, dateiSchluessel } from './nachtrag.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.2'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
 
 // ---------- Stammdaten ----------
 const TYPEN = {
@@ -695,7 +695,6 @@ const beimOeffnen = {
   panelDaten: () => datenZeichnen(),
   panelOffline: () => offlineZeichnen(),
   panelEbenen: () => ebenenZeichnen(),
-  panelInfo: () => { $('#version').textContent = VERSION; },
 };
 function allesZu() { $$('.panel').forEach((p) => { p.hidden = true; }); }
 function panelOeffnen(id) {
@@ -1127,6 +1126,31 @@ async function start() {
 }
 start().catch((e) => { console.error(e); toast(`Fehler beim Start: ${e.message}`, 8000); });
 
+// ---------- Updates ----------
+// iPhone-Web-Apps werden beim Antippen oft nur aus dem Hintergrund geholt statt neu
+// geladen – dann fragt niemand nach einer neuen Version. Deshalb selbst nachfragen,
+// wenn die App wieder sichtbar wird, und neu laden, sobald die neue Version bereitliegt.
+// Wer gerade etwas eintraegt, bekommt stattdessen einen Hinweis mit Knopf.
+$$('.app-version').forEach((el) => { el.textContent = VERSION; });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service Worker:', e));
+  const hatteVersion = !!navigator.serviceWorker.controller; // false = allererster Start
+  let zuletztGeprueft = Date.now();
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const pruefen = () => {
+      if (Date.now() - zuletztGeprueft < 30000) return;
+      zuletztGeprueft = Date.now();
+      reg.update().catch(() => { /* offline: beim naechsten Mal */ });
+    };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pruefen(); });
+    window.addEventListener('online', pruefen);
+  }).catch((e) => console.warn('Service Worker:', e));
+
+  let neuGeladen = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hatteVersion || neuGeladen) return;
+    neuGeladen = true;
+    if (!history.state?.panel && !modus) location.reload();
+    else $('#updateHinweis').hidden = false;
+  });
 }
+$('#updateLaden').onclick = () => location.reload();
