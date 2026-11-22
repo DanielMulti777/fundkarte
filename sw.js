@@ -1,7 +1,7 @@
 // Service Worker: App offline startfaehig machen und Kartenkacheln cachen.
 // Bei Aenderungen an App-Dateien VERSION erhoehen, damit Handys neu laden.
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const APP_CACHE = `app-${VERSION}`;
 const KACHEL_LAUFEND = 'kacheln-laufend';
 const MAX_LAUFEND = 4000;
@@ -20,7 +20,10 @@ const KACHEL_HOSTS = ['tile.openstreetmap.org', 'tile.opentopomap.org', 'mapsneu
 const istKachel = (url) => KACHEL_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`));
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(APP_DATEIEN)).then(() => self.skipWaiting()));
+  // cache: 'reload' – am Browser-Cache vorbei: GitHub Pages erlaubt 10 Minuten
+  // Zwischenspeichern, sonst landet beim Update evtl. noch die alte Datei im neuen Cache.
+  const frisch = APP_DATEIEN.map((u) => new Request(u, { cache: 'reload' }));
+  e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(frisch)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
