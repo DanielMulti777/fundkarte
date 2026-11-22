@@ -43,6 +43,13 @@ test('Stern statt Gradzeichen', () => koord(`47*44'15" N 16*23'50" O`, ...MB));
 test('Gradzeichen fehlt', () => koord(`4744'15" N 1623'50" O`, ...MB));
 test('Zwei Zeilen mit Datum (Live-Fall)', () => koord(`47°4415" N 16°23'50" O\n14. Juni 2025 08:05`, ...MB));
 
+// --- echter iPhone-Kompass-Screenshot (Bruck an der Mur), Original-Ausgabe der Texterkennung ---
+const BRUCK = [47 + 23 / 60 + 52 / 3600, 15 + 21 / 60 + 11 / 3600];
+const BRUCK_OCR = '10:40 ® . | 5G am)\n30 | 60\n0 Ni 90\nS 2\n330 S N © Z 120\n300 El HN 150\nTy, AN\n270 pW 180\n240 210\n44° NO\n47°23\'52" N 15°21"11" O\nBruck an der Mur, Steiermark\n1510 m Hohe\n';
+test('echter Screenshot Bruck (Minutenstrich als ")', () => koord(BRUCK_OCR, ...BRUCK));
+test('echter Screenshot: kein Datum erfunden', () => assert.equal(datumAusText(BRUCK_OCR, new Date(2026, 10, 22)), null));
+test('Minutenstrich als " bei beiden', () => koord(`47°23"52" N 15°21"11" O`, ...BRUCK));
+
 test('kein Treffer bei Hoehe/Uhrzeit', () => assert.equal(koordinatenAusText('234 m Höhe 12:41 Mattersburg'), null));
 test('kein Treffer bei Kompasskurs', () => assert.equal(koordinatenAusText('274° W'), null));
 test('ungueltige Minuten', () => assert.equal(koordinatenAusText(`47°74'15" N 16°23'50" O`), null));

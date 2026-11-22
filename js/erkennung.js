@@ -25,18 +25,23 @@ const ZAHL = String.raw`\d{1,3}`;
 const DEZ = String.raw`\d{1,2}(?:[.,]\d+)?`;
 
 // Reihenfolge wichtig: das genaueste Muster zuerst
+// Minutenstrich: ' – die Texterkennung liest den schmalen ′ der iPhone-Schrift aber
+// auch als " (echter Screenshot 2026-11: 15°21"11" O). Weil danach noch Sekunden
+// und ein " folgen, ist das trotzdem eindeutig.
+const MIN = `['"]`;
+
 const MUSTER = [
   // 47°44'15" N  |  47° 44' 15.3" N  |  16°23'50"O  (auch mit "0" statt "O" direkt nach dem ")
-  new RegExp(String.raw`(${ZAHL})\s*°\s*(\d{1,2})\s*'\s*(${DEZ})\s*(?:"\s*([NSEOW0])|"?\s*([NSEOW]))(?![a-zäöü])`, 'gi'),
+  new RegExp(String.raw`(${ZAHL})\s*°\s*(\d{1,2})\s*${MIN}\s*(${DEZ})\s*(?:"\s*([NSEOW0])|"?\s*([NSEOW]))(?![a-zäöü])`, 'gi'),
   // 47°44.250' N  (Grad + Dezimalminuten)
   new RegExp(String.raw`(${ZAHL})\s*°\s*(\d{1,2}[.,]\d+)\s*'\s*([NSEOW])(?![a-zäöü])`, 'gi'),
   // 47.73750° N  |  47,7375 N
   new RegExp(String.raw`(${ZAHL}[.,]\d{3,})\s*°?\s*([NSEOW])(?![a-zäöü])`, 'gi'),
   // Texterkennung hat ein Zeichen verschluckt oder verwechselt:
   // 47°4415" N (Minutenstrich fehlt) | 47°44 15" N | 47o44'15" N | 47*44'15" N
-  new RegExp(String.raw`(${ZAHL})\s*[°o*]\s*(\d{2})\s*'?\s*(\d{2}(?:[.,]\d+)?)\s*(?:"\s*([NSEOW0])|"?\s*([NSEOW]))(?![a-zäöü])`, 'gi'),
+  new RegExp(String.raw`(${ZAHL})\s*[°o*]\s*(\d{2})\s*${MIN}?\s*(\d{2}(?:[.,]\d+)?)\s*(?:"\s*([NSEOW0])|"?\s*([NSEOW]))(?![a-zäöü])`, 'gi'),
   // 4744'15" N (Gradzeichen fehlt; nur zweistellige Grade eindeutig trennbar)
-  new RegExp(String.raw`(?<![\d.,])(\d{2})(\d{2})\s*'\s*(${DEZ})\s*(?:"\s*([NSEOW0])|"?\s*([NSEOW]))(?![a-zäöü])`, 'gi'),
+  new RegExp(String.raw`(?<![\d.,])(\d{2})(\d{2})\s*${MIN}\s*(${DEZ})\s*(?:"\s*([NSEOW0])|"?\s*([NSEOW]))(?![a-zäöü])`, 'gi'),
 ];
 
 const zahl = (s) => Number(String(s).replace(',', '.'));

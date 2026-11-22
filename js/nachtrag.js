@@ -124,9 +124,10 @@ export async function bildAuswerten(file) {
   const istScreenshot = /screenshot|bildschirmfoto/i.test(`${kommentar} ${file.name}`) || file.type === 'image/png';
   const kamera = !!(meta?.Make || meta?.Model);
 
-  // Texterkennung nur, wo sie etwas finden kann: Kamerafotos ohne GPS zeigen
-  // Pflanzen und Tiere, keine Koordinaten – das spart pro Bild Sekunden.
-  if (e.lat == null && (istScreenshot || !kamera)) {
+  // Ohne GPS immer Texterkennung: Screenshots aus der iPhone-Mediathek kommen
+  // teils als JPEG mit Kameradaten an und waeren sonst nicht als Screenshot
+  // erkennbar. Bei echten Kamerafotos kostet das nur ein, zwei Sekunden im Hintergrund.
+  if (e.lat == null) {
     try {
       e.ocrText = await textErkennen(file);
       const k = koordinatenAusText(e.ocrText);
