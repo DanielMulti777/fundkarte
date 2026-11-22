@@ -1,3 +1,4 @@
 scripts/.cache/
 scripts/*.log
 .wrangler/
+.claude/

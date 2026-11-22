@@ -83,6 +83,7 @@
     <div class="panel-inhalt menue">
       <button class="btn btn-gross btn-hell" data-open="panelEbenen">🗺️ Kartenansicht &amp; Grenzen</button>
       <button class="btn btn-gross btn-hell" data-open="panelStatistik">📊 Statistik</button>
+      <button class="btn btn-gross btn-hell" data-open="panelNachtrag">🕘 Alte Funde nachtragen</button>
       <button class="btn btn-gross btn-hell" data-open="panelDaten">💾 Export / Import</button>
       <button class="btn btn-gross btn-hell" data-open="panelOffline">📶 Karten für offline</button>
       <button class="btn btn-gross btn-hell" data-open="panelInfo">ℹ️ Quellen &amp; Hinweise</button>
@@ -155,6 +156,23 @@
     </div>
   </section>
 
+  <!-- ===== Nachtragen ===== -->
+  <section class="panel" id="panelNachtrag" hidden>
+    <header class="panel-kopf"><h2>Alte Funde nachtragen</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-inhalt text">
+      <p>Wähle Fotos und Kompass-Screenshots von früheren Funden aus – gern viele auf einmal. Die App liest Standort und Datum aus und geht die Bilder dann mit dir der Reihe nach durch. Du ergänzt nur noch die Art.</p>
+      <label class="btn btn-gross datei-btn">🖼️ Bilder auswählen<input type="file" id="ntDateien" accept="image/*" multiple hidden></label>
+      <ul class="nt-liste">
+        <li>📷 <b>Fotos mit Standort</b> (Handy): Ort und Datum kommen direkt aus dem Foto, das Foto wird zum Fund gespeichert.</li>
+        <li>🧭 <b>Kompass-Screenshots</b>: Die Koordinaten (und ein Datum, falls zu sehen) werden aus dem Bild gelesen.</li>
+        <li>🖼️ <b>Fotos ohne Standort</b> (Kamera): Das Datum wird übernommen, die Stelle tippst du auf der Karte an.</li>
+      </ul>
+      <p class="hinweis">Bilder, die schon nachgetragen sind, werden automatisch übersprungen – du kannst also jederzeit aufhören und später weitermachen.</p>
+      <p class="hinweis"><b>iPhone:</b> Kommen Fotos ohne Standort an, wähle sie über „Dateien“ bzw. „Durchsuchen“ statt über die Mediathek aus – die Mediathek entfernt den Standort manchmal.</p>
+      <p class="hinweis">Die Texterkennung wird beim ersten Mal geladen (ca. 7 MB, am besten im WLAN) und läuft danach direkt am Handy, auch offline. Die Bilder verlassen das Gerät nicht.</p>
+    </div>
+  </section>
+
   <!-- ===== Info ===== -->
   <section class="panel" id="panelInfo" hidden>
     <header class="panel-kopf"><h2>Quellen &amp; Hinweise</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
@@ -176,6 +194,15 @@
   <section class="panel panel-formular" id="panelFormular" hidden>
     <header class="panel-kopf"><h2 id="formTitel">Neuer Fund</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
     <form id="formular" class="panel-inhalt" novalidate>
+      <div id="nachtragKopf" class="nachtrag-kopf" hidden>
+        <div class="nt-zeile"><b id="ntZaehler"></b><span id="ntAuswertung"></span></div>
+        <img id="ntBild" alt="Ausgewähltes Bild">
+        <p class="nt-datei" id="ntDatei"></p>
+        <p id="ntStatus" class="nt-status"></p>
+        <label class="feld"><span>Koordinaten</span><input id="ntKoord" autocomplete="off" enterkeyhint="done" placeholder="z. B. 47°44′15″ N 16°23′50″ O"></label>
+        <div id="ntKarte" class="nt-karte"></div>
+        <p class="hinweis">Auf der kleinen Karte tippen oder den Kreis ziehen, um die Stelle zu korrigieren.</p>
+      </div>
       <div class="kat-wahl" role="radiogroup" aria-label="Kategorie">
         <button type="button" data-kat="Pflanze" class="kat">🌿 Pflanze</button>
         <button type="button" data-kat="Tier" class="kat">🐾 Tier</button>
@@ -203,8 +230,9 @@
       <p id="fPosition" class="hinweis position"></p>
       <div class="knopfzeile">
         <button type="button" id="formLoeschen" class="btn btn-gefahr" hidden>Löschen</button>
-        <button type="button" class="btn btn-hell schliessen-btn">Abbrechen</button>
-        <button type="submit" class="btn">Speichern</button>
+        <button type="button" class="btn btn-hell schliessen-btn" id="formAbbrechen">Abbrechen</button>
+        <button type="button" class="btn btn-hell" id="ntUeberspringen" hidden>Überspringen</button>
+        <button type="submit" class="btn" id="formSpeichern">Speichern</button>
       </div>
     </form>
   </section>

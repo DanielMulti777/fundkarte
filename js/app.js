@@ -2,6 +2,8 @@
 import * as db from './db.js';
 import { bezirkeLaden, bezirkFinden, gemeindenLaden, ortBestimmen } from './geo.js';
 import * as offline from './offline.js';
+import { alsGradMinSek, koordinatenAusText } from './erkennung.js';
+import { bildAuswerten, dateiSchluessel } from './nachtrag.js';
 
 const VERSION = '1.0.0';
 
@@ -398,7 +400,11 @@ $('#gruppenWahl').onclick = (e) => {
 
 async function formularOeffnen(fund, istNeu) {
   bearbeitung = { fund: { ...fund }, istNeu, neuesFoto: null, fotoEntfernt: false };
-  $('#formTitel').textContent = istNeu ? 'Neuer Fund' : 'Fund bearbeiten';
+  $('#formTitel').textContent = nachtrag ? 'Fund nachtragen' : (istNeu ? 'Neuer Fund' : 'Fund bearbeiten');
+  $('#nachtragKopf').hidden = !nachtrag;
+  $('#ntUeberspringen').hidden = !nachtrag;
+  $('#formAbbrechen').textContent = nachtrag ? 'Beenden' : 'Abbrechen';
+  $('#formSpeichern').textContent = nachtrag ? 'Speichern & weiter' : 'Speichern';
   fSel.art.value = fund.art || ''; fSel.wiss.value = fund.wiss || '';
   fSel.datum.value = fund.datum || lokalJetzt(); fSel.anzahl.value = fund.anzahl || '';
   fSel.lebensraum.value = fund.lebensraum || ''; fSel.notiz.value = fund.notiz || '';
@@ -415,9 +421,16 @@ async function formularOeffnen(fund, istNeu) {
 async function positionAnzeigen() {
   const f = bearbeitung.fund;
   const el = $('#fPosition');
+  if (f.lat == null) { el.textContent = '📍 Noch keine Position'; return; }
   const basis = `📍 ${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}${f.genauigkeit ? ` · ± ${Math.round(f.genauigkeit)} m` : ''}`;
   el.textContent = basis;
-  if (!f.bezirk || bearbeitung.istNeu) Object.assign(f, await ortBestimmen(f.lat, f.lng));
+  if (!f.bezirk || bearbeitung.istNeu) {
+    const lat = f.lat; const lng = f.lng;
+    const o = await ortBestimmen(lat, lng);
+    // Inzwischen verschoben (Nachtragen-Karte)? Dann gehoert das Ergebnis nicht mehr hierher.
+    if (bearbeitung?.fund !== f || f.lat !== lat || f.lng !== lng) return;
+    Object.assign(f, o);
+  }
   const ort = [f.gemeinde, kurzBezirk(f.bezirk)].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ');
   el.textContent = ort ? `${basis} · ${ort}` : basis;
 }
@@ -471,6 +484,7 @@ $('#formular').onsubmit = async (e) => {
   const b = bearbeitung;
   const art = fSel.art.value.trim();
   if (!art) { toast('Bitte einen Artnamen eingeben.'); fSel.art.focus(); return; }
+  if (b.fund.lat == null) { toast('Bitte zuerst die Fundstelle auf der kleinen Karte antippen.', 4000); $('#ntKarte').scrollIntoView({ block: 'center' }); return; }
   if (b.fund.kategorie === 'Tier' && !b.fund.gruppe) b.fund.gruppe = 'Sonstiges';
   const jetzt = new Date().toISOString();
   const f = {
@@ -484,12 +498,20 @@ $('#formular').onsubmit = async (e) => {
   } else if (b.fotoEntfernt && f.fotoId) {
     await db.fotoLoeschen(f.fotoId); f.fotoId = null;
   }
-  if (!f.bezirk) Object.assign(f, await ortBestimmen(f.lat, f.lng));
+  if (!f.bezirk || nachtrag) Object.assign(f, await ortBestimmen(f.lat, f.lng));
+  if (nachtrag) f.importKey = nachtrag.eintraege[nachtrag.index].schluessel;
   await db.fundSpeichern(f);
   const i = funde.findIndex((x) => x.id === f.id);
   if (i >= 0) funde[i] = f; else funde.push(f);
   letzteKategorie = { kategorie: f.kategorie, gruppe: f.gruppe };
   bearbeitung = null;
+  if (nachtrag) {
+    nachtrag.gespeichert++;
+    toast(`„${f.art}“ gespeichert`, 1500);
+    nachtragWeiter();
+    if (funde.length === 1) db.dauerhaftAnfordern();
+    return;
+  }
   panelSchliessen();
   aktualisieren();
   toast(b.istNeu ? `„${f.art}“ gespeichert` : 'Änderungen gespeichert');
@@ -501,6 +523,164 @@ $('#formLoeschen').onclick = async () => {
   panelSchliessen();
   await fundLoeschenFragen(f);
 };
+
+// ---------- Alte Funde nachtragen ----------
+// Viele Bilder auf einmal: Auswertung laeuft der Reihe nach im Hintergrund,
+// waehrend man die bereits ausgewerteten schon durchgeht.
+let nachtrag = null; // { eintraege: [{file, schluessel, p, erg}], index, gespeichert, uebersprungen, bereits, fertig }
+let ntBildUrl = null;
+let ntKarte = null; let ntMarker = null; let ntEbene = null;
+
+$('#ntDateien').onchange = (e) => {
+  const dateien = [...e.target.files];
+  e.target.value = '';
+  if (dateien.length) nachtragStarten(dateien);
+};
+
+function nachtragStarten(dateien) {
+  const vorhanden = new Set(funde.map((f) => f.importKey).filter(Boolean));
+  const neu = dateien.filter((d) => !vorhanden.has(dateiSchluessel(d)));
+  const bereits = dateien.length - neu.length;
+  if (!neu.length) { toast(`Alle ${dateien.length} Bilder wurden schon nachgetragen.`, 4000); return; }
+  const lauf = { eintraege: [], index: 0, gespeichert: 0, uebersprungen: 0, bereits, fertig: 0 };
+  let kette = Promise.resolve();
+  for (const file of neu) {
+    const eintrag = { file, schluessel: dateiSchluessel(file), erg: null };
+    eintrag.p = kette = kette
+      .then(() => (nachtrag === lauf ? bildAuswerten(file) : null))
+      .catch((err) => ({ lat: null, lng: null, ortQuelle: null, datum: null, istFoto: true, hinweis: `Bild nicht lesbar (${err?.message ?? err}).` }))
+      .then((erg) => { eintrag.erg = erg; lauf.fertig++; if (nachtrag === lauf) ntFortschritt(); return erg; });
+    lauf.eintraege.push(eintrag);
+  }
+  nachtrag = lauf;
+  if (bereits) toast(`${bereits} Bild(er) waren schon nachgetragen und werden übersprungen.`, 4000);
+  nachtragZeigen();
+}
+
+function ntFortschritt() {
+  const n = nachtrag;
+  $('#ntZaehler').textContent = `Bild ${n.index + 1} von ${n.eintraege.length}`;
+  $('#ntAuswertung').textContent = n.fertig < n.eintraege.length ? `ausgewertet: ${n.fertig} / ${n.eintraege.length}` : 'alle ausgewertet';
+}
+
+async function nachtragZeigen() {
+  const lauf = nachtrag;
+  const eintrag = lauf.eintraege[lauf.index];
+  await formularOeffnen(neuerFund(null, null), true);
+  ntFortschritt();
+  $('#ntDatei').textContent = eintrag.file.name;
+  if (ntBildUrl) URL.revokeObjectURL(ntBildUrl);
+  ntBildUrl = URL.createObjectURL(eintrag.file);
+  const img = $('#ntBild');
+  img.hidden = false; img.onerror = () => { img.hidden = true; };
+  img.src = ntBildUrl;
+  $('#ntKoord').value = '';
+  ntStatus(lauf.fertig === 0 && lauf.index === 0
+    ? '⏳ Bild wird ausgewertet … (beim ersten Mal wird die Texterkennung geladen, das dauert etwas)'
+    : '⏳ Bild wird ausgewertet …');
+  $('#formSpeichern').disabled = true;
+  requestAnimationFrame(() => ntKarteZeigen(null, null));
+
+  const erg = await eintrag.p;
+  if (nachtrag !== lauf || lauf.eintraege[lauf.index] !== eintrag || !bearbeitung) return;
+  $('#formSpeichern').disabled = false;
+
+  const zeilen = [];
+  if (erg.ortQuelle === 'foto') zeilen.push('📷 Standort aus dem Foto übernommen.');
+  else if (erg.ortQuelle === 'screenshot') zeilen.push(`🧭 Koordinaten erkannt: ${erg.roh || alsGradMinSek(erg.lat, erg.lng)} – bitte auf der Karte prüfen.`);
+  else zeilen.push('⚠️ Kein Standort gefunden – tippe auf der kleinen Karte auf die Fundstelle oder gib die Koordinaten ein.');
+  if (erg.datumQuelle === 'screenshot') zeilen.push('📅 Datum aus dem Screenshot gelesen.');
+  else if (erg.datumQuelle === 'foto') zeilen.push('📅 Datum aus dem Foto übernommen.');
+  else if (erg.datumQuelle === 'datei') zeilen.push('📅 Datum = Dateidatum, bitte prüfen.');
+  if (erg.hinweis) zeilen.push(erg.hinweis);
+  ntStatus(zeilen.join('\n'), erg.lat == null);
+
+  if (erg.datum) fSel.datum.value = erg.datum;
+  if (erg.lat != null) ntPositionSetzen(erg.lat, erg.lng, { zoom: 15 });
+  else ntKarteZeigen(null, null);
+  if (erg.istFoto) {
+    try {
+      const blob = await fotoVerkleinern(eintrag.file);
+      if (bearbeitung && nachtrag === lauf && lauf.eintraege[lauf.index] === eintrag) {
+        bearbeitung.neuesFoto = blob; fotoVorschau(blob);
+      }
+    } catch { /* z. B. HEIC in Chrome: Foto dann von Hand waehlen */ }
+  }
+}
+
+function ntStatus(text, warnung = false) {
+  const el = $('#ntStatus');
+  el.textContent = text;
+  el.classList.toggle('warnung', warnung);
+}
+
+function ntKarteZeigen(lat, lng, zoom = 15) {
+  if (!ntKarte) {
+    ntKarte = L.map('ntKarte', { zoomControl: true, attributionControl: false, maxZoom: 19, minZoom: 6 });
+    ntKarte.on('click', (e) => ntPositionSetzen(e.latlng.lat, e.latlng.lng, { zoom: null }));
+  }
+  if (ntEbene?._fundkarteId !== aktiveEbene) {
+    if (ntEbene) ntKarte.removeLayer(ntEbene);
+    const def = offline.EBENEN.find((x) => x.id === aktiveEbene) || offline.EBENEN[0];
+    ntEbene = L.tileLayer(def.url, { maxZoom: def.maxZoom, maxNativeZoom: def.maxNativeZoom, subdomains: def.subdomains || 'abc' }).addTo(ntKarte);
+    ntEbene._fundkarteId = def.id;
+  }
+  ntKarte.invalidateSize();
+  if (lat != null) {
+    if (!ntMarker) {
+      ntMarker = L.marker([lat, lng], {
+        draggable: true, keyboard: false,
+        icon: L.divIcon({ className: 'tipp-ziel', html: '<i></i>', iconSize: [36, 36], iconAnchor: [18, 18] }),
+      }).on('dragend', () => { const p = ntMarker.getLatLng(); ntPositionSetzen(p.lat, p.lng, { zoom: null }); });
+    }
+    ntMarker.setLatLng([lat, lng]).addTo(ntKarte);
+    if (zoom) ntKarte.setView([lat, lng], zoom); else ntKarte.panTo([lat, lng]);
+  } else {
+    if (ntMarker) ntKarte.removeLayer(ntMarker);
+    // Ohne Position: dort beginnen, wo man zuletzt war (meist dieselbe Gegend)
+    const letzter = funde.length ? funde[funde.length - 1] : null;
+    if (letzter) ntKarte.setView([letzter.lat, letzter.lng], 12); else ntKarte.setView(map.getCenter(), Math.min(map.getZoom(), 12));
+  }
+}
+
+function ntPositionSetzen(lat, lng, { zoom = 15 } = {}) {
+  if (!bearbeitung) return;
+  Object.assign(bearbeitung.fund, { lat, lng, genauigkeit: null, bezirk: null, gemeinde: null, bezirkGkz: null });
+  $('#ntKoord').value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  ntKarteZeigen(lat, lng, zoom);
+  const st = $('#ntStatus');
+  if (st.classList.contains('warnung')) {
+    st.textContent = st.textContent.replace(/^⚠️ Kein Standort gefunden[^\n]*/, '📍 Fundstelle gesetzt.');
+    st.classList.remove('warnung');
+  }
+  positionAnzeigen();
+}
+
+$('#ntKoord').addEventListener('change', (e) => {
+  const k = koordinatenAusText(e.target.value);
+  if (!k) { toast('Koordinaten nicht erkannt. Beispiel: 47°44′15″ N 16°23′50″ O oder 47.7375, 16.3972', 5000); return; }
+  ntPositionSetzen(k.lat, k.lng);
+});
+
+$('#ntUeberspringen').onclick = () => { if (!nachtrag) return; nachtrag.uebersprungen++; nachtragWeiter(); };
+
+function nachtragWeiter() {
+  nachtrag.index++;
+  if (nachtrag.index >= nachtrag.eintraege.length) { panelSchliessen(); return; } // popstate -> nachtragBeenden
+  $('.panel-formular .panel-inhalt').scrollTop = 0;
+  nachtragZeigen();
+}
+
+function nachtragBeenden() {
+  const n = nachtrag;
+  nachtrag = null;
+  if (ntBildUrl) { URL.revokeObjectURL(ntBildUrl); ntBildUrl = null; }
+  $('#formSpeichern').disabled = false;
+  aktualisieren();
+  const offen = n.eintraege.length - n.index;
+  toast(`Nachtragen ${offen > 0 ? 'beendet' : 'fertig'}: ${n.gespeichert} gespeichert, ${n.uebersprungen} übersprungen`
+    + `${offen > 0 ? `, ${offen} offen` : ''}${n.bereits ? `, ${n.bereits} schon vorhanden` : ''}.`, 6000);
+}
 
 function artenListeFuellen() {
   const arten = [...new Set(funde.map((f) => f.art))].sort((a, b) => a.localeCompare(b, 'de'));
@@ -531,6 +711,8 @@ function panelSchliessen() {
 window.addEventListener('popstate', () => {
   allesZu();
   if (history.state?.panel) $(`#${history.state.panel}`).hidden = false;
+  // Formular zu (Beenden, ✕, Zurück-Taste) = Nachtragen vorbei
+  if (nachtrag && history.state?.panel !== 'panelFormular') nachtragBeenden();
 });
 document.addEventListener('click', (e) => {
   const o = e.target.closest('[data-open]');
@@ -683,7 +865,7 @@ $('#exportCsv').onclick = () => {
   datei(new Blob(['﻿' + zeilen.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `funde-${stempel()}.csv`);
 };
 
-const EIGENSCHAFTEN = ['id', 'kategorie', 'gruppe', 'art', 'wiss', 'datum', 'anzahl', 'lebensraum', 'notiz', 'gemeinde', 'bezirk', 'genauigkeit', 'erstellt', 'geaendert'];
+const EIGENSCHAFTEN = ['id', 'kategorie', 'gruppe', 'art', 'wiss', 'datum', 'anzahl', 'lebensraum', 'notiz', 'gemeinde', 'bezirk', 'genauigkeit', 'erstellt', 'geaendert', 'importKey'];
 function alsFeature(f) {
   return {
     type: 'Feature',
@@ -736,6 +918,7 @@ $('#importDatei').onchange = async (e) => {
       lat, lng, genauigkeit: Number(p.genauigkeit) || null,
       gemeinde: p.gemeinde || null, bezirk: p.bezirk || null,
       erstellt: p.erstellt || new Date().toISOString(), geaendert: p.geaendert || new Date().toISOString(),
+      importKey: p.importKey || null,
       fotoId: null,
     };
     const alt = funde.find((x) => x.id === f.id);
