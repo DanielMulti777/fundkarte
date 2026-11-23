@@ -4,8 +4,9 @@ import { bezirkeLaden, bezirkFinden, gemeindenLaden, ortBestimmen } from './geo.
 import * as offline from './offline.js';
 import { alsGradMinSek, koordinatenAusText } from './erkennung.js';
 import { bildAuswerten, dateiSchluessel } from './nachtrag.js';
+import { falterStarten, panelZeichnen as falterPanelZeichnen } from './falter.js';
 
-const VERSION = '1.2.2'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
+const VERSION = '1.3'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
 
 // ---------- Stammdaten ----------
 const TYPEN = {
@@ -695,6 +696,7 @@ const beimOeffnen = {
   panelDaten: () => datenZeichnen(),
   panelOffline: () => offlineZeichnen(),
   panelEbenen: () => ebenenZeichnen(),
+  panelFalter: () => falterPanelZeichnen(),
 };
 function allesZu() { $$('.panel').forEach((p) => { p.hidden = true; }); }
 function panelOeffnen(id) {
@@ -1123,6 +1125,7 @@ async function start() {
   else map.fitBounds(bezirkeLayer.getBounds(), { padding: [10, 10] });
   kopfAktualisieren();
   gemeindenAktualisieren();
+  await falterStarten({ map, db, toast, esc, cluster, bezirke: () => bezirke, panelOeffnen });
 }
 start().catch((e) => { console.error(e); toast(`Fehler beim Start: ${e.message}`, 8000); });
 

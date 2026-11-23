@@ -1,14 +1,14 @@
 // Service Worker: App offline startfaehig machen und Kartenkacheln cachen.
 // Bei Aenderungen an App-Dateien VERSION erhoehen, damit Handys neu laden.
 
-const VERSION = 'v10';
+const VERSION = 'v11';
 const APP_CACHE = `app-${VERSION}`;
 const KACHEL_LAUFEND = 'kacheln-laufend';
 const MAX_LAUFEND = 4000;
 
 const APP_DATEIEN = [
   './', 'index.html', 'app.css', 'manifest.webmanifest',
-  'js/app.js', 'js/db.js', 'js/geo.js', 'js/offline.js', 'js/erkennung.js', 'js/nachtrag.js',
+  'js/app.js', 'js/db.js', 'js/geo.js', 'js/offline.js', 'js/erkennung.js', 'js/nachtrag.js', 'js/falter.js',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'vendor/leaflet/images/layers.png', 'vendor/leaflet/images/layers-2x.png',
   'vendor/leaflet/images/marker-icon.png', 'vendor/leaflet/images/marker-icon-2x.png', 'vendor/leaflet/images/marker-shadow.png',

@@ -18,6 +18,16 @@ Live: https://danielmulti777.github.io/fundkarte/
 Dann http://127.0.0.1:4330 öffnen. Der Server liefert nur die App-Dateien aus (keine
 versteckten Dateien, keine Ordnerlisten). GPS und Offline-Modus brauchen am Handy eine https-Adresse.
 
+## Tagfalter-Datenbank (GBIF)
+
+    python scripts/schmetterlinge_holen.py            # Burgenland über die GBIF-Suche (ohne Konto)
+    python scripts/schmetterlinge_holen.py --download # ganz Österreich, offizieller Download
+
+Schreibt `data/falter/` (Übersichtsraster, Einzelsichtungen je Bezirk, Artenliste mit deutschen
+Namen). Doppelte Meldungen (gleiche Art, Tag, ~100 m) werden zusammengefasst, Synonyme
+(gleiche Familie + Epitheton) vereinigt. Monatlich aktualisiert über `.github/workflows/falter.yml`;
+dafür die Repository-Secrets `GBIF_USER` und `GBIF_PWD` setzen.
+
 ## Tests
 
     node scripts/erkennung_test.mjs

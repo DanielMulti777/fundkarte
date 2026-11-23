@@ -87,6 +87,7 @@
     <header class="panel-kopf"><h2>Mehr</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
     <div class="panel-inhalt menue">
       <button class="btn btn-gross btn-hell" data-open="panelEbenen">🗺️ Kartenansicht &amp; Grenzen</button>
+      <button class="btn btn-gross btn-hell" data-open="panelFalter">🦋 Schmetterlinge (Datenbank)</button>
       <button class="btn btn-gross btn-hell" data-open="panelStatistik">📊 Statistik</button>
       <button class="btn btn-gross btn-hell" data-open="panelNachtrag">🕘 Alte Funde nachtragen</button>
       <button class="btn btn-gross btn-hell" data-open="panelDaten">💾 Export / Import</button>
@@ -159,6 +160,47 @@
       <h3>Gespeichert</h3>
       <p id="offlineBestand" class="hinweis"></p>
       <button id="offlineLoeschen" class="btn btn-hell">Offline-Karten löschen</button>
+    </div>
+  </section>
+
+  <!-- ===== Schmetterlings-Datenbank ===== -->
+  <section class="panel" id="panelFalter" hidden>
+    <header class="panel-kopf"><h2>🦋 Tagfalter-Datenbank</h2><button class="schliessen" aria-label="Schließen">✕</button></header>
+    <div class="panel-inhalt">
+      <fieldset class="feld"><legend>Auf der Karte zeigen</legend>
+        <div class="chips" id="falterAnsicht">
+          <button type="button" data-ansicht="funde">Meine Funde</button>
+          <button type="button" data-ansicht="datenbank">Datenbank</button>
+          <button type="button" data-ansicht="beides">Beides</button>
+        </div>
+      </fieldset>
+      <fieldset class="feld"><legend>Zeitraum</legend>
+        <div class="zeile">
+          <label class="feld"><span>Von Jahr</span><input type="number" id="falterVon" inputmode="numeric" min="1800" max="2100" placeholder="z. B. 1950"></label>
+          <label class="feld"><span>Bis Jahr</span><input type="number" id="falterBis" inputmode="numeric" min="1800" max="2100" placeholder="heute"></label>
+        </div>
+        <div class="chips chips-klein" id="falterZeitSchnell">
+          <button type="button" data-zeit="alle">alle Jahre</button>
+          <button type="button" data-zeit="1950">ab 1950</button>
+          <button type="button" data-zeit="1980">ab 1980</button>
+          <button type="button" data-zeit="2000">ab 2000</button>
+          <button type="button" data-zeit="2010">ab 2010</button>
+          <button type="button" data-zeit="2020">ab 2020</button>
+          <button type="button" data-zeit="5">letzte 5 Jahre</button>
+        </div>
+        <p class="hinweis">Herausgezoomt rechnet die Übersicht in Zeitblöcken (vor 1950, 1950–79, 1980–99, 2000–09, 2010–19, ab 2020); die einzelnen Sichtungen sind jahrgenau gefiltert.</p>
+      </fieldset>
+      <fieldset class="feld"><legend>Arten <small id="falterArtZahl"></small></legend>
+        <input type="search" id="falterSuche" placeholder="Art suchen – deutsch oder lateinisch" autocomplete="off">
+        <div class="falter-werkzeug">
+          <select id="falterSort" aria-label="Sortierung"><option value="name">nach Name</option><option value="anzahl">nach Häufigkeit</option></select>
+          <button type="button" class="btn btn-hell btn-klein" id="falterAuswahlWeg">Auswahl aufheben</button>
+        </div>
+        <ul id="falterArten" class="falter-arten"></ul>
+        <p class="hinweis">Zahl = Sichtungen im gewählten Zeitraum. Keine Art angehakt = alle Arten.</p>
+      </fieldset>
+      <p class="hinweis" id="falterInfo"></p>
+      <details class="hinweis"><summary>Quellen &amp; Lizenzen</summary><ul id="falterQuellen"></ul></details>
     </div>
   </section>
 

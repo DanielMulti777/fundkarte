@@ -1,0 +1,40 @@
+# Tagfalter-Daten monatlich aus GBIF aktualisieren (offizieller Download mit DOI).
+# Zugangsdaten als Repository-Secrets: GBIF_USER, GBIF_PWD (Settings → Secrets and variables → Actions).
+name: Tagfalter-Daten aktualisieren
+
+on:
+  schedule:
+    - cron: "17 3 2 * *"   # am 2. jedes Monats, 03:17 UTC
+  workflow_dispatch:        # auch von Hand startbar (Actions → Run workflow)
+
+permissions:
+  contents: write
+
+jobs:
+  aktualisieren:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: GBIF-Download holen und aufbereiten
+        env:
+          GBIF_USER: ${{ secrets.GBIF_USER }}
+          GBIF_PWD: ${{ secrets.GBIF_PWD }}
+        run: python scripts/schmetterlinge_holen.py --download
+
+      - name: Neue Daten committen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/falter
+          if git diff --cached --quiet; then
+            echo "Keine Änderungen."
+            exit 0
+          fi
+          git commit -m "Tagfalter-Daten aktualisiert ($(date +%Y-%m-%d))"
+          git push

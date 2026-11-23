@@ -303,3 +303,30 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--moos); outl
 }
 .update-hinweis .btn { background: #f0c24b; color: #2b2b12; }
 .menue-version { text-align: center; margin-top: 1.2rem; }
+
+/* Tagfalter-Datenbank */
+.falter-chip {
+  margin-top: .5rem; max-width: 62vw; min-height: 40px; padding: 0 .8rem; border: 0; border-radius: 12px;
+  background: #b8510c; color: #fff; font-weight: 600; font-size: .85rem; box-shadow: var(--schatten);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+}
+.falter-legende {
+  background: rgba(255,255,255,.92); border-radius: 10px; padding: .4rem .55rem; font-size: .72rem;
+  box-shadow: var(--schatten); display: flex; flex-direction: column; gap: 2px; max-width: 150px;
+}
+.falter-legende b { font-size: .74rem; margin-bottom: 2px; }
+.falter-legende span { display: flex; align-items: center; gap: .35rem; }
+.falter-legende i { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(0,0,0,.15); }
+.falter-werkzeug { display: flex; gap: .5rem; margin: .5rem 0; }
+.falter-werkzeug select { flex: 1; min-height: 40px; }
+.falter-arten { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow-y: auto; border: 1px solid var(--rand); border-radius: 10px; background: #fff; }
+.falter-arten li { border-bottom: 1px solid var(--sand-dunkel); }
+.falter-arten li.leer { opacity: .5; }
+.falter-arten label { display: flex; align-items: center; gap: .6rem; padding: .5rem .7rem; min-height: 48px; cursor: pointer; }
+.falter-arten input { width: 22px; height: 22px; accent-color: #b8510c; flex-shrink: 0; }
+.falter-arten .name { flex: 1; min-width: 0; }
+.falter-arten .name i { display: block; font-size: .8rem; color: var(--text-leise); }
+.falter-arten b { font-variant-numeric: tabular-nums; color: var(--text-leise); font-weight: 600; }
+.falter-zelle { list-style: none; padding: 0; margin: .3rem 0; }
+.falter-zelle li { display: flex; justify-content: space-between; gap: .6rem; padding: .1rem 0; }
+#falterAnsicht button[aria-pressed=true] { background: #b8510c; border-color: #b8510c; }
