@@ -1,7 +1,7 @@
 // Service Worker: App offline startfaehig machen und Kartenkacheln cachen.
 // Bei Aenderungen an App-Dateien VERSION erhoehen, damit Handys neu laden.
 
-const VERSION = 'v11';
+const VERSION = 'v12';
 const APP_CACHE = `app-${VERSION}`;
 const KACHEL_LAUFEND = 'kacheln-laufend';
 const MAX_LAUFEND = 4000;
@@ -20,10 +20,19 @@ const KACHEL_HOSTS = ['tile.openstreetmap.org', 'tile.opentopomap.org', 'mapsneu
 const istKachel = (url) => KACHEL_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`));
 
 self.addEventListener('install', (e) => {
-  // cache: 'reload' – am Browser-Cache vorbei: GitHub Pages erlaubt 10 Minuten
-  // Zwischenspeichern, sonst landet beim Update evtl. noch die alte Datei im neuen Cache.
-  const frisch = APP_DATEIEN.map((u) => new Request(u, { cache: 'reload' }));
-  e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(frisch)).then(() => self.skipWaiting()));
+  // Jede Datei unter einer je Version eindeutigen Adresse holen (?v=…) und unter
+  // ihrem normalen Namen ablegen. GitHub Pages erlaubt 10 Minuten Zwischenspeichern,
+  // und Safari beachtet cache:'reload' nicht zuverlaessig – am iPhone landete so
+  // neuer Code mit alter index.html im Cache (1.3 ohne Schmetterlings-Menue).
+  e.waitUntil((async () => {
+    const cache = await caches.open(APP_CACHE);
+    await Promise.all(APP_DATEIEN.map(async (u) => {
+      const r = await fetch(`${u}${u.includes('?') ? '&' : '?'}v=${VERSION}`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`${u}: ${r.status}`);
+      await cache.put(u, r);
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (e) => {

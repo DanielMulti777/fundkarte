@@ -6,7 +6,7 @@ import { alsGradMinSek, koordinatenAusText } from './erkennung.js';
 import { bildAuswerten, dateiSchluessel } from './nachtrag.js';
 import { falterStarten, panelZeichnen as falterPanelZeichnen } from './falter.js';
 
-const VERSION = '1.3'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
+const VERSION = '1.3.1'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
 
 // ---------- Stammdaten ----------
 const TYPEN = {

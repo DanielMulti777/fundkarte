@@ -55,6 +55,9 @@ function artName(i) { return arten[i]?.d || arten[i]?.w || '?'; }
 // ---------- Ansicht steuern ----------
 export async function falterStarten(kontext) {
   k = kontext;
+  // Passt index.html nicht zum Code (halb aktualisierter Cache), lieber still
+  // aussetzen als den App-Start mit einem Fehler abbrechen
+  if (!document.getElementById('panelFalter')) return;
   const gespeichert = await k.db.einstellungLesen('falter');
   if (gespeichert) {
     Object.assign(zustand, gespeichert, { arten: new Set(gespeichert.arten || []), suche: '' });
