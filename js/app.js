@@ -6,7 +6,7 @@ import { alsGradMinSek, koordinatenAusText } from './erkennung.js';
 import { bildAuswerten, dateiSchluessel } from './nachtrag.js';
 import { falterStarten, falterTipp, panelZeichnen as falterPanelZeichnen } from './falter.js';
 
-const VERSION = '1.4'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
+const VERSION = '1.4.1'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
 
 // ---------- Stammdaten ----------
 const TYPEN = {
@@ -270,7 +270,7 @@ function aktualisieren() {
     // Funktion erneut auf und wuerde sonst ein neues, ungeladenes Bild erzeugen.
     let inhalt = null;
     m.bindPopup(() => (inhalt ||= popupInhalt(f)), {
-      maxWidth: 300, minWidth: 230, autoPanPaddingTopLeft: [64, 76], autoPanPaddingBottomRight: [12, 96],
+      maxWidth: 300, minWidth: 230, autoPanPaddingTopLeft: [64, 130], autoPanPaddingBottomRight: [12, 96],
     });
     m.on('popupclose', () => { inhalt = null; });
     markerVon.set(f.id, m);

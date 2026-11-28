@@ -13,7 +13,7 @@ const DETAIL_AB_ZOOM = 11;
 // Radius der Sichtungspunkte in Pixel: herausgezoomt kleiner, sonst nur ein Teppich
 const punktRadius = (z) => (z <= 11 ? 3 : (z === 12 ? 4 : 5));
 // Abstand zu Kartenknoepfen und unterer Knopfleiste wie bei den eigenen Funden
-const POPUP = { maxWidth: 260, autoPanPaddingTopLeft: [64, 76], autoPanPaddingBottomRight: [12, 96] };
+const POPUP = { maxWidth: 260, autoPanPaddingTopLeft: [64, 170], autoPanPaddingBottomRight: [12, 96] }; // oben Platz fuer Satellit-Knopf und Filter-Chip
 // Kaestchen: hell -> dunkel; bewusst Orange/Braun, damit nichts nach eigenen Funden aussieht
 const STUFEN_FARBEN = ['#fde7c3', '#fbc77f', '#f7a03f', '#e3741c', '#b8510c', '#7f3307'];
 const STUFEN_ARTEN = [1, 3, 6, 12, 25, 45];
@@ -32,14 +32,15 @@ const rasterLayer = L.layerGroup();
 // In dichten Gegenden (Stadt Salzburg: 56.000 Sichtungen bei Zoom 11) waeren
 // zehntausende CircleMarker zu viel fuer jedes Handy. Gezeichnet wird je
 // 256-px-Kachel aus vorab projizierten Koordinaten; ein Tipp sucht den naechsten Punkt.
-let punkte = []; // { sp, i, b } – aelteste zuerst, damit neue obenauf liegen
+// Ein "Punkt" ist eine Stelle: alle Sichtungen mit genau derselben Koordinate
+// (oft Sammelangaben mit ungefaehrem Fundort – bei Linz liegen 6.000 auf einem Fleck).
+let punkte = []; // { y, x, b, eintraege: [{ sp, i, jahr }] } – aelteste zuerst, neue obenauf
 let projZoom = null; let projX = null; let projY = null;
 function projektion(z) {
   if (projZoom === z && projX) return;
   projX = new Float64Array(punkte.length); projY = new Float64Array(punkte.length);
   for (let j = 0; j < punkte.length; j++) {
-    const { sp, i } = punkte[j];
-    const pt = k.map.project([sp.y[i], sp.x[i]], z);
+    const pt = k.map.project([punkte[j].y, punkte[j].x], z);
     projX[j] = pt.x; projY[j] = pt.y;
   }
   projZoom = z;
@@ -56,18 +57,29 @@ const PunktLayer = L.GridLayer.extend({
     ctx.scale(dpr, dpr);
     projektion(c.z);
     const R = punktRadius(c.z);
-    const ox = c.x * g.x; const oy = c.y * g.y; const r = R + 2;
+    const ox = c.x * g.x; const oy = c.y * g.y; const r = R + 12;
     ctx.lineWidth = R > 3 ? 1.5 : 1; ctx.strokeStyle = '#fff';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (let j = 0; j < punkte.length; j++) {
       const x = projX[j] - ox; const y = projY[j] - oy;
       if (x < -r || y < -r || x > g.x + r || y > g.y + r) continue;
-      ctx.beginPath(); ctx.arc(x, y, R, 0, 2 * Math.PI);
+      const n = punkte[j].eintraege.length;
+      const rad = stapelRadius(R, n);
+      ctx.beginPath(); ctx.arc(x, y, rad, 0, 2 * Math.PI);
       ctx.fillStyle = BLOCK_FARBEN[punkte[j].b]; ctx.fill(); ctx.stroke();
+      // Anzahl nur, wenn genug Platz ist (ab Zoom 12)
+      if (n > 1 && R >= 4) {
+        ctx.fillStyle = '#fff';
+        ctx.font = `700 ${n > 99 ? 8 : 9}px system-ui, sans-serif`;
+        ctx.fillText(n > 999 ? '999+' : String(n), x, y + 0.5);
+      }
     }
     return t;
   },
 });
 const detailLayer = new PunktLayer();
+// Stapel werden etwas groesser, damit die Zahl hineinpasst und man sie erkennt
+function stapelRadius(R, n) { return n > 1 ? R + Math.min(7, 2 + Math.log2(n) * 1.3) : R; }
 let falterPopup = null;
 const bezirkDaten = new Map(); // gkz -> Promise<spalten>
 let ungenauKreis = null;
@@ -121,6 +133,10 @@ export async function falterStarten(kontext) {
     const q = p?._source;
     return !!q && rasterLayer.hasLayer(q);
   };
+  // Legende unten links wuerde lange Popups ueberdecken -> solange ausblenden
+  const legendeSichtbar = (ja) => { if (legende.el) legende.el.style.visibility = ja ? '' : 'hidden'; };
+  k.map.on('popupopen', () => legendeSichtbar(false));
+  k.map.on('popupclose', () => legendeSichtbar(true));
   k.map.on('popupopen', (e) => { if (istUnseres(e.popup)) popupOffen = true; });
   k.map.on('moveend', () => {
     if (zustand.ansicht === 'funde') return;
@@ -152,12 +168,14 @@ export function falterTipp(e) {
     const z = k.map.getZoom();
     projektion(z);
     const ziel = k.map.project(e.latlng, z);
-    let best = -1; let bestD = 32 * 32;
+    let best = -1; let bestD = Infinity;
+    const R = punktRadius(z);
     // Neueste zuerst pruefen: bei gleichem Abstand gewinnt der oben gezeichnete Punkt
     for (let j = punkte.length - 1; j >= 0; j--) {
       const dx = projX[j] - ziel.x; const dy = projY[j] - ziel.y;
+      const grenze = 32 + stapelRadius(R, punkte[j].eintraege.length) - R;
       const d = dx * dx + dy * dy;
-      if (d < bestD) { best = j; bestD = d; }
+      if (d < grenze * grenze && d < bestD) { best = j; bestD = d; }
     }
     if (best >= 0) { sichtungOeffnen(best); return true; }
   }
@@ -293,25 +311,80 @@ async function detailZeichnen() {
       const jahr = Number(sp.t[i].slice(0, 4));
       if (jahr < jahrVon() || jahr > jahrBis()) continue;
       if (!blick.contains([sp.y[i], sp.x[i]])) continue;
-      neu.push({ sp, i, b: BLOECKE.reduce((acc, start, j) => (jahr >= start ? j : acc), 0), jahr });
+      neu.push({ sp, i, jahr });
     }
   }
-  neu.sort((x, y) => x.jahr - y.jahr);
-  punkte = neu; projZoom = null;
+  const stellen = new Map();
+  for (const e of neu) {
+    const key = `${e.sp.y[e.i]},${e.sp.x[e.i]}`;
+    let st = stellen.get(key);
+    if (!st) { st = { y: e.sp.y[e.i], x: e.sp.x[e.i], eintraege: [], jahr: 0 }; stellen.set(key, st); }
+    st.eintraege.push(e);
+    if (e.jahr > st.jahr) st.jahr = e.jahr;
+  }
+  punkte = [...stellen.values()].sort((a, b) => a.jahr - b.jahr);
+  for (const st of punkte) {
+    st.b = BLOECKE.reduce((acc, start, j) => (st.jahr >= start ? j : acc), 0);
+    st.eintraege.sort((a, b) => b.jahr - a.jahr || b.sp.t[b.i].localeCompare(a.sp.t[a.i]));
+  }
+  projZoom = null;
   detailLayer.redraw();
   legendeZeigen('punkte');
   return 'ok';
 }
 
 function sichtungOeffnen(j) {
-  const { sp, i, b } = punkte[j];
-  const ll = [sp.y[i], sp.x[i]];
+  const st = punkte[j];
+  if (st.eintraege.length === 1) { einzelOeffnen(st.eintraege[0]); return; }
+  popupZeigen([st.y, st.x], stapelPopup(st), st.eintraege[0]);
+}
+
+function einzelOeffnen(e) {
+  popupZeigen([e.sp.y[e.i], e.sp.x[e.i]], sichtungPopup(e.sp, e.i), e);
+}
+
+function popupZeigen(ll, inhalt, e) {
   if (ungenauKreis) k.map.removeLayer(ungenauKreis);
-  falterPopup = L.popup({ ...POPUP, offset: [0, -punktRadius(k.map.getZoom())] }).setLatLng(ll).setContent(sichtungPopup(sp, i));
+  // falterPopup wird vor openOn ersetzt: das dabei geschlossene alte Popup gilt dann
+  // nicht mehr als "unseres" und loest beim Wechsel Liste -> Einzelsichtung kein Neuzeichnen aus
+  falterPopup = L.popup({ ...POPUP, offset: [0, -punktRadius(k.map.getZoom())] }).setLatLng(ll).setContent(inhalt);
   falterPopup.openOn(k.map);
-  ungenauKreis = sp.u[i] ? L.circle(ll, {
-    radius: sp.u[i], color: BLOCK_FARBEN[b], weight: 1.5, fillOpacity: 0.08, interactive: false,
+  const u = e.sp.u[e.i];
+  const b = BLOECKE.reduce((acc, start, j) => (e.jahr >= start ? j : acc), 0);
+  ungenauKreis = u ? L.circle(ll, {
+    radius: u, color: BLOCK_FARBEN[b], weight: 1.5, fillOpacity: 0.08, interactive: false,
   }).addTo(k.map) : null;
+}
+
+function stapelPopup(st) {
+  const jeArt = new Map(); // Art -> { n, von, bis, neueste }
+  for (const e of st.eintraege) {
+    const a = e.sp.a[e.i];
+    const g = jeArt.get(a) || { n: 0, von: e.jahr, bis: e.jahr, neueste: e };
+    g.n++; g.von = Math.min(g.von, e.jahr); g.bis = Math.max(g.bis, e.jahr);
+    jeArt.set(a, g);
+  }
+  const zeilen = [...jeArt.entries()].sort((x, y) => y[1].n - x[1].n);
+  const jahre = st.eintraege.map((e) => e.jahr);
+  const u = Math.max(...st.eintraege.map((e) => e.sp.u[e.i] || 0));
+  const el = document.createElement('div');
+  el.className = 'pop falter-pop';
+  el.innerHTML = `
+    <span class="typ" style="background:#b8510c">🦋 Datenbank</span>
+    <h4>${st.eintraege.length.toLocaleString('de-AT')} Sichtungen an dieser Stelle</h4>
+    <p class="hinweis">${zeilen.length} Art${zeilen.length === 1 ? '' : 'en'} · ${Math.min(...jahre)}–${Math.max(...jahre)}${u ? ` · Ortsangabe ± ${u.toLocaleString('de-AT')} m` : ''}</p>
+    <ul class="falter-stapel">${zeilen.slice(0, 30).map(([a, g], idx) => `
+      <li><button type="button" data-z="${idx}">
+        <span>${k.esc(artName(a))}</span>
+        <small>${g.n}× · ${g.von === g.bis ? g.von : `${g.von}–${g.bis}`}</small>
+      </button></li>`).join('')}</ul>
+    ${zeilen.length > 30 ? `<p class="hinweis">… und ${zeilen.length - 30} weitere Arten</p>` : ''}
+    <p class="hinweis">Gleiche Koordinate bei mehreren Meldungen – oft Sammelangaben mit ungefährem Fundort. Antippen zeigt die neueste Sichtung der Art.</p>`;
+  el.querySelector('.falter-stapel').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button'); if (!btn) return;
+    einzelOeffnen(zeilen[Number(btn.dataset.z)][1].neueste);
+  });
+  return el;
 }
 
 // GBIF schreibt Lizenzen je nach Abrufweg als URL oder als "CC_BY_NC_4_0"
