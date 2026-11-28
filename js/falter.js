@@ -68,7 +68,12 @@ export async function falterStarten(kontext) {
   // gezeichnet, verschwaende der Punkt samt Popup sofort wieder. Deshalb warten,
   // bis das Popup zu ist.
   let popupOffen = false; let neuZeichnen = false;
-  const istUnseres = (p) => rasterLayer.hasLayer(p?._source) || detailLayer.hasLayer(p?._source);
+  // Freistehende Popups ("Neuer Fund hier") haben keine Quelle – hasLayer(undefined)
+  // wirft in Leaflet und braeche dann das Oeffnen/Schliessen anderer Popups ab
+  const istUnseres = (p) => {
+    const q = p?._source;
+    return !!q && (rasterLayer.hasLayer(q) || detailLayer.hasLayer(q));
+  };
   k.map.on('popupopen', (e) => { if (istUnseres(e.popup)) popupOffen = true; });
   k.map.on('moveend', () => {
     if (zustand.ansicht === 'funde') return;
