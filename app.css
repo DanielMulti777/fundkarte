@@ -330,3 +330,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--moos); outl
 .falter-zelle { list-style: none; padding: 0; margin: .3rem 0; }
 .falter-zelle li { display: flex; justify-content: space-between; gap: .6rem; padding: .1rem 0; }
 #falterAnsicht button[aria-pressed=true] { background: #b8510c; border-color: #b8510c; }
+
+/* Datenbank-Modus: keine Fund-Knoepfe, dafuer ein klarer Weg zurueck */
+#btnZurueckFunde { display: none; }
+.falter-nur-datenbank #btnStandortFund, .falter-nur-datenbank #btnKartenFund { display: none; }
+.falter-nur-datenbank #btnZurueckFunde { display: inline-flex; }
+.pop-neu-knoepfe { display: flex; flex-direction: column; gap: .45rem; }
+.pop-neu-knoepfe .btn { width: 100%; }

@@ -4,9 +4,9 @@ import { bezirkeLaden, bezirkFinden, gemeindenLaden, ortBestimmen } from './geo.
 import * as offline from './offline.js';
 import { alsGradMinSek, koordinatenAusText } from './erkennung.js';
 import { bildAuswerten, dateiSchluessel } from './nachtrag.js';
-import { falterStarten, panelZeichnen as falterPanelZeichnen } from './falter.js';
+import { falterStarten, falterTipp, panelZeichnen as falterPanelZeichnen } from './falter.js';
 
-const VERSION = '1.3.1'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
+const VERSION = '1.3.2'; // sichtbar unter „Mehr“ – bei Updates mit sw.js-VERSION mitziehen
 
 // ---------- Stammdaten ----------
 const TYPEN = {
@@ -313,10 +313,18 @@ map.on('click', async (e) => {
   }
   // Ein Tipp, der nur ein offenes Popup schliesst, soll keinen neuen Fund anbieten
   if (Date.now() - popupZuZeit < 400) return;
+  // Schmetterlings-Datenbank: knapp daneben getippt -> naechste Sichtung oeffnen;
+  // im reinen Datenbank-Modus nie einen neuen Fund anbieten
+  if (falterTipp(e)) return;
   const el = document.createElement('div');
   el.className = 'pop-neu';
-  el.innerHTML = '<p class="ort">…</p><button class="btn">＋ Neuer Fund hier</button>';
-  $('button', el).onclick = () => { map.closePopup(); formularOeffnen(neuerFund(lat, lng), true); };
+  el.innerHTML = `<p class="ort">…</p>
+    <div class="pop-neu-knoepfe">
+      <button class="btn" data-a="neu">＋ Neuer Fund hier</button>
+      <button class="btn btn-hell" data-a="weg">Abbrechen</button>
+    </div>`;
+  $('[data-a=neu]', el).onclick = () => { map.closePopup(); formularOeffnen(neuerFund(lat, lng), true); };
+  $('[data-a=weg]', el).onclick = () => map.closePopup();
   zielKreis.setLatLng(e.latlng).addTo(map);
   neuPopup = L.popup({ minWidth: 200, offset: [0, -14] }).setLatLng(e.latlng).setContent(el).openOn(map);
   const o = await ortBestimmen(lat, lng);

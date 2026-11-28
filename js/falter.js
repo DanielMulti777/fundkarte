@@ -89,9 +89,40 @@ function speichern() {
   k.db.einstellungSchreiben('falter', { ...zustand, arten: [...zustand.arten], suche: '' });
 }
 
+/**
+ * Tipp auf die Karte (aus app.js). true = erledigt, kein "Neuer Fund hier".
+ * Knapp neben einer Sichtung (bis ~32 px) oeffnet diese; im reinen
+ * Datenbank-Modus wird nie ein neuer Fund angeboten.
+ */
+export function falterTipp(e) {
+  if (!k || zustand.ansicht === 'funde') return false;
+  if (k.map.hasLayer(detailLayer)) {
+    const p = k.map.latLngToContainerPoint(e.latlng);
+    let best = null; let bestD = 32;
+    detailLayer.eachLayer((m) => {
+      const d = k.map.latLngToContainerPoint(m.getLatLng()).distanceTo(p);
+      if (d < bestD) { best = m; bestD = d; }
+    });
+    if (best) { best.openPopup(); return true; }
+  }
+  return zustand.ansicht === 'datenbank';
+}
+
+function ansichtSetzen(ansicht) {
+  zustand.ansicht = ansicht;
+  speichern();
+  anwenden();
+}
+
+let anwendenLauf = 0;
 async function anwenden() {
   const map = k.map;
+  // Spaeterer Aufruf gewinnt: sonst kann ein noch laufendes Neuzeichnen die
+  // Datenbank-Punkte wieder einblenden, nachdem schon auf "Meine Funde" gestellt wurde
+  const lauf = ++anwendenLauf;
   if (zustand.ansicht === 'datenbank') map.removeLayer(k.cluster); else if (!map.hasLayer(k.cluster)) map.addLayer(k.cluster);
+  // Im reinen Datenbank-Modus statt der Fund-Knoepfe ein klarer Weg zurueck
+  document.body.classList.toggle('falter-nur-datenbank', zustand.ansicht === 'datenbank');
   chipAktualisieren();
   if (zustand.ansicht === 'funde') {
     map.removeLayer(rasterLayer); map.removeLayer(detailLayer); legendeZeigen(null);
@@ -101,6 +132,7 @@ async function anwenden() {
     k.toast(`Schmetterlings-Daten nicht verfügbar (${e.message}).`, 5000);
     return;
   }
+  if (lauf !== anwendenLauf) return;
   if (map.getZoom() < DETAIL_AB_ZOOM) {
     map.removeLayer(detailLayer);
     rasterZeichnen();
@@ -195,7 +227,7 @@ async function detailZeichnen() {
       k.toast('Schmetterlings-Daten für dieses Gebiet sind offline nicht gespeichert.');
     }
   }
-  if (lauf !== detailLauf) return; // inzwischen weitergeschoben
+  if (lauf !== detailLauf || zustand.ansicht === 'funde') return; // inzwischen weitergeschoben/umgestellt
   detailLayer.clearLayers();
   const mitArten = zustand.arten.size > 0;
   for (const sp of daten) {
@@ -356,6 +388,7 @@ function artenZeichnen() {
 function $$(s) { return [...document.querySelectorAll(s)]; }
 
 function verdrahten() {
+  $('#btnZurueckFunde').onclick = () => { ansichtSetzen('funde'); k.map.closePopup(); };
   $('#falterAnsicht').onclick = (e) => {
     const b = e.target.closest('button'); if (!b) return;
     zustand.ansicht = b.dataset.ansicht; speichern(); panelZeichnen(); anwenden();
