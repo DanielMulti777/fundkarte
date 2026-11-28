@@ -303,6 +303,8 @@ def main(gebiete, per_download=False):
     #    z. B. Mellicta athalia und Melitaea athalia als zwei Arten. Regel: gleiche
     #    Familie + gleiches Art-Epitheton = gleiche Art (Hesperia comma und Polygonia
     #    comma bleiben getrennt, verschiedene Familien).
+    # Auf GitHub gibt es den Cache-Ordner nicht (nicht im Repo) – anlegen
+    CACHE.mkdir(parents=True, exist_ok=True)
     namen_cache_f = CACHE / "namen.json"
     namen_cache = json.loads(namen_cache_f.read_text(encoding="utf-8")) if namen_cache_f.exists() else {}
     anzahl_key = collections.Counter(d[0] for d in daten)
