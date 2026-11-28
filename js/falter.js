@@ -10,6 +10,8 @@ const BLOECKE = [0, 1950, 1980, 2000, 2010, 2020]; // muss zum Skript passen
 const BLOCK_NAMEN = ['vor 1950', '1950–1979', '1980–1999', '2000–2009', '2010–2019', 'seit 2020'];
 const BLOCK_FARBEN = ['#6b6b8a', '#4f7fae', '#3f9a8c', '#86a83a', '#e0a22b', '#d9531e'];
 const DETAIL_AB_ZOOM = 11;
+// Radius der Sichtungspunkte in Pixel: herausgezoomt kleiner, sonst nur ein Teppich
+const punktRadius = (z) => (z <= 11 ? 3 : (z === 12 ? 4 : 5));
 // Abstand zu Kartenknoepfen und unterer Knopfleiste wie bei den eigenen Funden
 const POPUP = { maxWidth: 260, autoPanPaddingTopLeft: [64, 76], autoPanPaddingBottomRight: [12, 96] };
 // Kaestchen: hell -> dunkel; bewusst Orange/Braun, damit nichts nach eigenen Funden aussieht
@@ -25,7 +27,48 @@ const zustand = { ansicht: 'funde', arten: new Set(), von: null, bis: null, sort
 // tolerance: Fingertipp bis ~10 px neben dem Punkt zaehlt noch als Treffer
 const renderer = L.canvas({ padding: 0.3, tolerance: 10 });
 const rasterLayer = L.layerGroup();
-const detailLayer = L.layerGroup();
+
+// Einzelsichtungen als selbst gezeichnete Kacheln statt als Leaflet-Objekte:
+// In dichten Gegenden (Stadt Salzburg: 56.000 Sichtungen bei Zoom 11) waeren
+// zehntausende CircleMarker zu viel fuer jedes Handy. Gezeichnet wird je
+// 256-px-Kachel aus vorab projizierten Koordinaten; ein Tipp sucht den naechsten Punkt.
+let punkte = []; // { sp, i, b } – aelteste zuerst, damit neue obenauf liegen
+let projZoom = null; let projX = null; let projY = null;
+function projektion(z) {
+  if (projZoom === z && projX) return;
+  projX = new Float64Array(punkte.length); projY = new Float64Array(punkte.length);
+  for (let j = 0; j < punkte.length; j++) {
+    const { sp, i } = punkte[j];
+    const pt = k.map.project([sp.y[i], sp.x[i]], z);
+    projX[j] = pt.x; projY[j] = pt.y;
+  }
+  projZoom = z;
+}
+const PunktLayer = L.GridLayer.extend({
+  options: { pane: 'falterPunkte', updateWhenZooming: false, keepBuffer: 1 },
+  createTile(c) {
+    const t = document.createElement('canvas');
+    const g = this.getTileSize();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    t.width = g.x * dpr; t.height = g.y * dpr;
+    t.style.width = `${g.x}px`; t.style.height = `${g.y}px`;
+    const ctx = t.getContext('2d');
+    ctx.scale(dpr, dpr);
+    projektion(c.z);
+    const R = punktRadius(c.z);
+    const ox = c.x * g.x; const oy = c.y * g.y; const r = R + 2;
+    ctx.lineWidth = R > 3 ? 1.5 : 1; ctx.strokeStyle = '#fff';
+    for (let j = 0; j < punkte.length; j++) {
+      const x = projX[j] - ox; const y = projY[j] - oy;
+      if (x < -r || y < -r || x > g.x + r || y > g.y + r) continue;
+      ctx.beginPath(); ctx.arc(x, y, R, 0, 2 * Math.PI);
+      ctx.fillStyle = BLOCK_FARBEN[punkte[j].b]; ctx.fill(); ctx.stroke();
+    }
+    return t;
+  },
+});
+const detailLayer = new PunktLayer();
+let falterPopup = null;
 const bezirkDaten = new Map(); // gkz -> Promise<spalten>
 let ungenauKreis = null;
 
@@ -62,6 +105,9 @@ export async function falterStarten(kontext) {
   if (gespeichert) {
     Object.assign(zustand, gespeichert, { arten: new Set(gespeichert.arten || []), suche: '' });
   }
+  const pane = k.map.createPane('falterPunkte');
+  pane.style.zIndex = 450; // ueber Grenzen, unter Markern und Popups
+  pane.style.pointerEvents = 'none'; // Tipps gehen an die Karte -> naechster Punkt
   k.map.addControl(new ChipControl());
   k.map.addControl(legende);
   // Ein offenes Popup verschiebt die Karte (autoPan) -> moveend. Wuerde dann neu
@@ -71,8 +117,9 @@ export async function falterStarten(kontext) {
   // Freistehende Popups ("Neuer Fund hier") haben keine Quelle – hasLayer(undefined)
   // wirft in Leaflet und braeche dann das Oeffnen/Schliessen anderer Popups ab
   const istUnseres = (p) => {
+    if (p && p === falterPopup) return true;
     const q = p?._source;
-    return !!q && (rasterLayer.hasLayer(q) || detailLayer.hasLayer(q));
+    return !!q && rasterLayer.hasLayer(q);
   };
   k.map.on('popupopen', (e) => { if (istUnseres(e.popup)) popupOffen = true; });
   k.map.on('moveend', () => {
@@ -101,14 +148,18 @@ function speichern() {
  */
 export function falterTipp(e) {
   if (!k || zustand.ansicht === 'funde') return false;
-  if (k.map.hasLayer(detailLayer)) {
-    const p = k.map.latLngToContainerPoint(e.latlng);
-    let best = null; let bestD = 32;
-    detailLayer.eachLayer((m) => {
-      const d = k.map.latLngToContainerPoint(m.getLatLng()).distanceTo(p);
-      if (d < bestD) { best = m; bestD = d; }
-    });
-    if (best) { best.openPopup(); return true; }
+  if (k.map.hasLayer(detailLayer) && punkte.length) {
+    const z = k.map.getZoom();
+    projektion(z);
+    const ziel = k.map.project(e.latlng, z);
+    let best = -1; let bestD = 32 * 32;
+    // Neueste zuerst pruefen: bei gleichem Abstand gewinnt der oben gezeichnete Punkt
+    for (let j = punkte.length - 1; j >= 0; j--) {
+      const dx = projX[j] - ziel.x; const dy = projY[j] - ziel.y;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { best = j; bestD = d; }
+    }
+    if (best >= 0) { sichtungOeffnen(best); return true; }
   }
   return zustand.ansicht === 'datenbank';
 }
@@ -143,9 +194,10 @@ async function anwenden() {
     rasterZeichnen();
     rasterLayer.addTo(map);
   } else {
+    const ergebnis = await detailZeichnen();
+    if (lauf !== anwendenLauf || ergebnis === 'abgebrochen') return;
     map.removeLayer(rasterLayer);
     detailLayer.addTo(map);
-    await detailZeichnen();
   }
   chipAktualisieren();
 }
@@ -232,32 +284,41 @@ async function detailZeichnen() {
       k.toast('Schmetterlings-Daten für dieses Gebiet sind offline nicht gespeichert.');
     }
   }
-  if (lauf !== detailLauf || zustand.ansicht === 'funde') return; // inzwischen weitergeschoben/umgestellt
-  detailLayer.clearLayers();
+  if (lauf !== detailLauf || zustand.ansicht === 'funde') return 'abgebrochen'; // inzwischen weitergeschoben/umgestellt
   const mitArten = zustand.arten.size > 0;
+  const neu = [];
   for (const sp of daten) {
     for (let i = 0; i < sp.a.length; i++) {
       if (mitArten && !zustand.arten.has(sp.a[i])) continue;
       const jahr = Number(sp.t[i].slice(0, 4));
       if (jahr < jahrVon() || jahr > jahrBis()) continue;
       if (!blick.contains([sp.y[i], sp.x[i]])) continue;
-      const b = BLOECKE.reduce((acc, start, j) => (jahr >= start ? j : acc), 0);
-      const m = L.circleMarker([sp.y[i], sp.x[i]], {
-        renderer, radius: 6, weight: 1.5, color: '#fff', fillColor: BLOCK_FARBEN[b], fillOpacity: 0.92,
-        bubblingMouseEvents: false,
-      });
-      const idx = i;
-      m.bindPopup(() => sichtungPopup(sp, idx), POPUP);
-      m.on('popupopen', () => {
-        if (ungenauKreis) k.map.removeLayer(ungenauKreis);
-        ungenauKreis = sp.u[idx] ? L.circle([sp.y[idx], sp.x[idx]], {
-          radius: sp.u[idx], color: BLOCK_FARBEN[b], weight: 1.5, fillOpacity: 0.08, interactive: false,
-        }).addTo(k.map) : null;
-      });
-      detailLayer.addLayer(m);
+      neu.push({ sp, i, b: BLOECKE.reduce((acc, start, j) => (jahr >= start ? j : acc), 0), jahr });
     }
   }
+  neu.sort((x, y) => x.jahr - y.jahr);
+  punkte = neu; projZoom = null;
+  detailLayer.redraw();
   legendeZeigen('punkte');
+  return 'ok';
+}
+
+function sichtungOeffnen(j) {
+  const { sp, i, b } = punkte[j];
+  const ll = [sp.y[i], sp.x[i]];
+  if (ungenauKreis) k.map.removeLayer(ungenauKreis);
+  falterPopup = L.popup({ ...POPUP, offset: [0, -punktRadius(k.map.getZoom())] }).setLatLng(ll).setContent(sichtungPopup(sp, i));
+  falterPopup.openOn(k.map);
+  ungenauKreis = sp.u[i] ? L.circle(ll, {
+    radius: sp.u[i], color: BLOCK_FARBEN[b], weight: 1.5, fillOpacity: 0.08, interactive: false,
+  }).addTo(k.map) : null;
+}
+
+// GBIF schreibt Lizenzen je nach Abrufweg als URL oder als "CC_BY_NC_4_0"
+function lizenzText(l) {
+  const m = /^CC(0)?_?(BY)?_?(NC|SA|ND)?_?(\d)_(\d)$/i.exec(l || '');
+  if (!m) return l;
+  return m[1] ? 'CC0' : `CC ${m[2]}${m[3] ? `-${m[3]}` : ''} ${m[4]}.${m[5]}`;
 }
 
 function datumText(t) {
@@ -277,7 +338,7 @@ function sichtungPopup(sp, i) {
     <dl>
       <dt>Datum</dt><dd>${k.esc(datumText(sp.t[i]))}</dd>
       <dt>Genauigkeit</dt><dd>${sp.u[i] ? `± ${sp.u[i].toLocaleString('de-AT')} m` : 'nicht angegeben'}</dd>
-      <dt>Quelle${quellen.length > 1 ? 'n' : ''}</dt><dd>${quellen.map((q) => `${k.esc(q.name)} <small>(${k.esc(q.lizenz)})</small>`).join('<br>')}</dd>
+      <dt>Quelle${quellen.length > 1 ? 'n' : ''}</dt><dd>${quellen.map((q) => `${k.esc(q.name)} <small>(${k.esc(lizenzText(q.lizenz))})</small>`).join('<br>')}</dd>
     </dl>
     ${sp.n[i] > 1 ? `<p class="hinweis">${sp.n[i]} gleichlautende Meldungen zusammengefasst.</p>` : ''}
     <p><a href="https://www.gbif.org/occurrence/${sp.i[i]}" target="_blank" rel="noopener">Original bei GBIF ansehen ↗</a></p>
@@ -370,7 +431,7 @@ export async function panelZeichnen() {
   artenZeichnen();
   $('#falterInfo').innerHTML = `Enthalten: <b>${k.esc(meta.gebiete.join(', '))}</b> · ${meta.sichtungen.toLocaleString('de-AT')} Sichtungen
     von ${arten.length} Arten · Stand ${k.esc(meta.stand.split('-').reverse().join('.'))}<br>Quelle: ${k.esc(meta.zitat)}`;
-  $('#falterQuellen').innerHTML = meta.quellen.map((q) => `<li>${k.esc(q.name)} <small>(${k.esc(q.lizenz)})</small></li>`).join('');
+  $('#falterQuellen').innerHTML = meta.quellen.map((q) => `<li>${k.esc(q.name)} <small>(${k.esc(lizenzText(q.lizenz))})</small></li>`).join('');
 }
 
 function artenZeichnen() {

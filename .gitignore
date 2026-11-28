@@ -2,3 +2,4 @@ scripts/.cache/
 scripts/*.log
 .wrangler/
 .claude/
+__pycache__/

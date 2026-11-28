@@ -188,6 +188,14 @@ def download(gebiet_land="AT"):
 
 
 def lizenz_kurz(url):
+    # Download liefert "CC_BY_NC_4_0", die Suche eine URL – beides vereinheitlichen
+    roh = (url or "").upper()
+    if roh in ("CC0_1_0",):
+        return "CC0"
+    if roh.startswith("CC_BY"):
+        teile = roh.split("_")  # CC, BY, [NC], 4, 0
+        art = "-".join(teile[1:-2])
+        return f"CC {art} {teile[-2]}.{teile[-1]}"
     u = (url or "").lower()
     if "publicdomain/zero" in u or "cc0" in u:
         return "CC0"

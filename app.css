@@ -337,3 +337,5 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--moos); outl
 .falter-nur-datenbank #btnZurueckFunde { display: inline-flex; }
 .pop-neu-knoepfe { display: flex; flex-direction: column; gap: .45rem; }
 .pop-neu-knoepfe .btn { width: 100%; }
+
+.falter-legende em { font-style: normal; font-weight: 600; color: #7f3307; margin-bottom: 4px; line-height: 1.3; }
